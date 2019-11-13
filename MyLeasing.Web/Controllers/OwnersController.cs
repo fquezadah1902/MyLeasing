@@ -16,27 +16,30 @@ namespace MyLeasing.Web.Controllers
     [Authorize(Roles = "Manager")]
     public class OwnersController : Controller
     {
-        private readonly DataContext _datacontext;
+        private readonly DataContext _dataContext;
         private readonly IUserHelper _userHelper;
         private readonly ICombosHelper _combosHelper;
         private readonly IConverterHelper _converterHelper;
+        private readonly IImageHelper _imageHelper;
 
         public OwnersController(
             DataContext datacontext,
             IUserHelper userHelper,
             ICombosHelper combosHelper,
-            IConverterHelper converterHelper)
+            IConverterHelper converterHelper,
+            IImageHelper imageHelper)
         {
-            _datacontext = datacontext;
+            _dataContext = datacontext;
             _userHelper = userHelper;
             _combosHelper = combosHelper;
             _converterHelper = converterHelper;
+            _imageHelper = imageHelper;
         }
 
         // GET: Owners
         public IActionResult Index()
         {
-            return View(_datacontext.Owners
+            return View(_dataContext.Owners
                 .Include(o => o.User)
                 .Include(o => o.Properties)
                 .Include(o => o.Contracts));
@@ -50,7 +53,7 @@ namespace MyLeasing.Web.Controllers
                 return NotFound();
             }
 
-            var owner = await _datacontext.Owners
+            var owner = await _dataContext.Owners
                 .Include(o=> o.User)
                 .Include(o => o.Properties)
                 .ThenInclude(p => p.PropertyImages)
@@ -88,8 +91,8 @@ namespace MyLeasing.Web.Controllers
                         User = user
                     };
 
-                    _datacontext.Owners.Add(owner);
-                    await _datacontext.SaveChangesAsync();
+                    _dataContext.Owners.Add(owner);
+                    await _dataContext.SaveChangesAsync();
                     return RedirectToAction("Index");
 
                 }
@@ -135,7 +138,7 @@ namespace MyLeasing.Web.Controllers
                 return NotFound();
             }
 
-            var owner = await _datacontext.Owners.FindAsync(id);
+            var owner = await _dataContext.Owners.FindAsync(id);
             if (owner == null)
             {
                 return NotFound();
@@ -159,8 +162,8 @@ namespace MyLeasing.Web.Controllers
             {
                 try
                 {
-                    _datacontext.Update(owner);
-                    await _datacontext.SaveChangesAsync();
+                    _dataContext.Update(owner);
+                    await _dataContext.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -186,7 +189,7 @@ namespace MyLeasing.Web.Controllers
                 return NotFound();
             }
 
-            var owner = await _datacontext.Owners
+            var owner = await _dataContext.Owners
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (owner == null)
             {
@@ -201,15 +204,15 @@ namespace MyLeasing.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var owner = await _datacontext.Owners.FindAsync(id);
-            _datacontext.Owners.Remove(owner);
-            await _datacontext.SaveChangesAsync();
+            var owner = await _dataContext.Owners.FindAsync(id);
+            _dataContext.Owners.Remove(owner);
+            await _dataContext.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
         private bool OwnerExists(int id)
         {
-            return _datacontext.Owners.Any(e => e.Id == id);
+            return _dataContext.Owners.Any(e => e.Id == id);
         }
 
         public async Task<IActionResult> AddProperty(int? id)
@@ -219,7 +222,7 @@ namespace MyLeasing.Web.Controllers
                 return NotFound();
             }
 
-            var owner = await _datacontext.Owners.FindAsync(id);
+            var owner = await _dataContext.Owners.FindAsync(id);
             if (owner == null)
             {
                 return NotFound();
@@ -233,6 +236,7 @@ namespace MyLeasing.Web.Controllers
             return View(model);
             
         }
+
         [HttpPost]
         public async Task<IActionResult> AddProperty(PropertyViewModel model)
         {
@@ -240,8 +244,8 @@ namespace MyLeasing.Web.Controllers
             {
                 var property = await _converterHelper.ToPropertyAsync(model, true);
 
-                _datacontext.Properties.Add(property);
-                await _datacontext.SaveChangesAsync();
+                _dataContext.Properties.Add(property);
+                await _dataContext.SaveChangesAsync();
                 return RedirectToAction($"Details/{model.OwnerId}");
             }
 
@@ -249,9 +253,115 @@ namespace MyLeasing.Web.Controllers
 
         }
 
-        //private Property ToProperty(PropertyViewModel model, bool isNew)
-        //{
-        //    throw new NotImplementedException();
-        //}
+        public async Task<IActionResult> EditProperty(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var property = await _dataContext.Properties
+                .Include(p => p.Owner)
+                .Include(p => p.PropertyType)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (property == null)
+            {
+                return NotFound();
+            }
+
+            var model = _converterHelper.ToPropertyViewModel(property);
+
+            return View(model);
+
+        }
+        [HttpPost]
+        public async Task<IActionResult> EditProperty(PropertyViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                var property = await _converterHelper.ToPropertyAsync(model, false);
+
+                _dataContext.Properties.Update(property);
+                await _dataContext.SaveChangesAsync();
+                return RedirectToAction($"Details/{model.OwnerId}");
+            }
+
+            return View(model);
+
+        }
+
+        public async Task<IActionResult> DetailsProperty(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var property = await _dataContext.Properties
+                .Include(o => o.Owner)
+                .ThenInclude(o => o.User)
+                .Include(o => o.Contracts)
+                .ThenInclude(c => c.Lessee)
+                .ThenInclude(l => l.User)
+                .Include(o => o.PropertyType)
+                .Include(p => p.PropertyImages)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (property == null)
+            {
+                return NotFound();
+            }
+
+            return View(property);
+        }
+
+
+        public async Task<IActionResult> AddImage(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var property = await _dataContext.Properties.FindAsync(id.Value);
+            if (property == null)
+            {
+                return NotFound();
+            }
+
+            var model = new PropertyImageViewModel
+            {
+                Id = property.Id
+            };
+
+            return View(model);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddImage(PropertyImageViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                var path = string.Empty;
+
+                if (model.ImageFile != null)
+                {
+                    path = await _imageHelper.UploadImageAsync(model.ImageFile);
+                }
+
+                var propertyImage = new PropertyImage
+                {
+                    ImageUrl = path,
+                    Property = await _dataContext.Properties.FindAsync(model.Id)
+                };
+
+                _dataContext.PropertyImages.Add(propertyImage);
+                await _dataContext.SaveChangesAsync();
+                return RedirectToAction($"{nameof(DetailsProperty)}/{model.Id}");
+            }
+
+            return View(model);
+        }
+
+
     }
 }
