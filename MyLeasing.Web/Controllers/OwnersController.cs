@@ -478,6 +478,35 @@ namespace MyLeasing.Web.Controllers
         }
 
 
+        public async Task<IActionResult> DeleteProperty(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var property = await _dataContext.Properties
+                .Include(p => p.Owner)
+                .Include(p => p.PropertyImages)
+                .Include(p => p.Contracts)
+                .FirstOrDefaultAsync(pi => pi.Id == id.Value);
+            if (property == null)
+            {
+                return NotFound();
+            }
+
+            if (property.Contracts.Count != 0)
+            {
+                ModelState.AddModelError(String.Empty, "Then Property can't be delete because it has contracts.");
+                return RedirectToAction($"{nameof(Details)}/{property.Owner.Id}");
+            }
+
+            _dataContext.PropertyImages.RemoveRange(property.PropertyImages);
+            _dataContext.Properties.Remove(property);
+            await _dataContext.SaveChangesAsync();
+            return RedirectToAction($"{nameof(Details)}/{property.Owner.Id}");
+        }
+
 
     }
 
